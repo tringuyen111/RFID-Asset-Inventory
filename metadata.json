@@ -1,0 +1,5 @@
+{
+  "name": "RFID Asset Inventory",
+  "description": "A mobile application to integrate RFID technology into asset inventory management, allowing users to declare, audit, and look up asset information efficiently.",
+  "requestFramePermissions": []
+}
