@@ -1,15 +1,25 @@
+
 import React from 'react';
 import { useNavigation } from '../App';
 import Layout from '../components/Layout';
 import Header from '../components/Header';
 import { ICONS } from '../constants';
+import type { Registration, InventoryTask } from '../types';
 
-const HomeScreen: React.FC = () => {
+interface HomeScreenProps {
+  registrations: Registration[];
+  inventoryTasks: InventoryTask[];
+}
+
+const HomeScreen: React.FC<HomeScreenProps> = ({ registrations, inventoryTasks }) => {
   const { navigate } = useNavigation();
 
+  const pendingDeclarations = registrations.filter(r => r.status === 'pending').length;
+  const pendingInventory = inventoryTasks.filter(t => t.status === 'pending').length;
+
   const menuItems = [
-    { title: 'Khai báo', icon: ICONS.declaration, action: () => navigate('declarationList'), notification: 0, color: 'text-blue-500' },
-    { title: 'Kiểm kê', icon: ICONS.inventory, action: () => navigate('inventoryList'), notification: 1, color: 'text-indigo-500' },
+    { title: 'Khai báo', icon: ICONS.declaration, action: () => navigate('declarationList'), notification: pendingDeclarations, color: 'text-blue-500' },
+    { title: 'Kiểm kê', icon: ICONS.inventory, action: () => navigate('inventoryList'), notification: pendingInventory, color: 'text-indigo-500' },
     { title: 'Truy xuất thông tin', icon: ICONS.search, action: () => navigate('lookup'), notification: 0, color: 'text-purple-500' },
   ];
 

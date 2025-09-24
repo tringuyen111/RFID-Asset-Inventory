@@ -1,4 +1,4 @@
-import type { Registration, RegistrationDetail, InventoryTask, InventoryTaskDetail, AssetInfo, AssetDetails } from '../types';
+import type { Registration, RegistrationDetail, InventoryTask, InventoryTaskDetail, AssetInfo, AssetDetails, Warehouse, Location, AssetType } from '../types';
 
 export const MOCK_REGISTRATIONS: Record<string, Registration> = {
     "R012345": {
@@ -123,3 +123,30 @@ export const BARCODE_TO_EPC_MAP: Record<string, string> = Object.values(ASSET_LO
     acc[asset.barcode] = asset.epc;
     return acc;
 }, {} as Record<string, string>);
+
+
+// --- Data for Declaration Creation ---
+
+export const MOCK_WAREHOUSES: Warehouse[] = [
+    { id: 'WH01', name: 'Kho Trung tâm' },
+    { id: 'WH02', name: 'Kho Vệ tinh 1' },
+    { id: 'WH03', name: 'Kho Hàng trả' },
+];
+
+export const MOCK_LOCATIONS: Location[] = [
+    { id: 'LOC01-A', name: 'Khu A', warehouseId: 'WH01' },
+    { id: 'LOC01-B', name: 'Khu B', warehouseId: 'WH01' },
+    { id: 'LOC01-C', name: 'Khu C', warehouseId: 'WH01' },
+    { id: 'LOC02-A', name: 'Khu A', warehouseId: 'WH02' },
+    { id: 'LOC02-B', name: 'Khu B', warehouseId: 'WH02' },
+];
+
+export const MOCK_ASSET_TYPES: AssetType[] = [
+    { id: 'AT01', name: 'Bàn gỗ' },
+    { id: 'AT02', name: 'Ghế điều chỉnh' },
+    { id: 'AT03', name: 'Màn hình Dell' },
+    { id: 'AT04', name: 'Laptop ThinkPad' },
+    { id: 'AT05', name: 'Máy in Canon' },
+    { id: 'AT06', name: 'Bàn họp lớn' },
+    { id: 'AT07', name: 'Ghế chân quỳ' },
+];

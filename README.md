@@ -1,19 +1,20 @@
 <div align="center">
-  <h1>📦 RFID Asset Inventory Prototype</h1>
-  <p>Dự án thử nghiệm tích hợp RFID vào kiểm kê tài sản</p>
-  <p><b>Tác giả:</b> Nguyễn Mạnh Trí</p>
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
----
+# Run and deploy your AI Studio app
 
-## 🎯 Giới thiệu
+This contains everything you need to run your app locally.
 
-Dự án này là **prototype** minh họa quy trình (flow) tích hợp **RFID** vào nghiệp vụ **kiểm kê tài sản**.  
-Mục tiêu chính:
-- Mô phỏng các bước nghiệp vụ từ quét RFID đến ghi nhận kiểm kê.
-- Trình bày flow nghiệp vụ trên ứng dụng (Web/PDA).
-- Không nhằm mục đích sản phẩm hoàn chỉnh, mà để **thử nghiệm ý tưởng** và **trình diễn luồng chức năng**.
+View your app in AI Studio: https://ai.studio/apps/drive/1O0Mwh6D9JcEjXWvLRXGuc0sIUEaOY_sa
+
+## Run Locally
+
+**Prerequisites:**  Node.js
 
 
-   git clone <link_repo>
-   cd rfid-inventory-prototype
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

@@ -1,13 +1,14 @@
 
 import React, { useState, useCallback, createContext, useContext } from 'react';
 // FIX: `NavigationContextType` was not imported. It's needed for the NavigationContext.
-import type { Screen, RegistrationDetail, InventoryTaskDetail, NavigationContextType, AssetDetails } from './types';
+import type { Screen, Registration, RegistrationDetail, InventoryTaskDetail, NavigationContextType, AssetDetails, DeclarationItem } from './types';
 import { MOCK_REGISTRATIONS, MOCK_REGISTRATION_DETAILS, MOCK_INVENTORY_DETAILS } from './services/data';
 
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
 import DeclarationListScreen from './screens/DeclarationListScreen';
 import DeclarationDetailScreen from './screens/DeclarationDetailScreen';
+import DeclarationCreateScreen from './screens/DeclarationCreateScreen';
 import ScanScreen from './screens/ScanScreen';
 import RadarScanScreen from './screens/RadarScanScreen';
 import InventoryListScreen from './screens/InventoryListScreen';
@@ -34,6 +35,7 @@ export const useNavigation = () => {
 
 const App: React.FC = () => {
   const [navigationStack, setNavigationStack] = useState<Screen[]>([{ name: 'login' }]);
+  const [registrations, setRegistrations] = useState<Record<string, Registration>>(MOCK_REGISTRATIONS);
   const [declarationData, setDeclarationData] = useState<Record<string, RegistrationDetail>>(MOCK_REGISTRATION_DETAILS);
   const [inventoryData, setInventoryData] = useState<Record<string, InventoryTaskDetail>>(MOCK_INVENTORY_DETAILS);
   const [backPopup, setBackPopup] = useState<{ isVisible: boolean, proceed: () => void }>({ isVisible: false, proceed: () => {} });
@@ -123,18 +125,52 @@ const App: React.FC = () => {
     });
   }, []);
 
+  const createDeclaration = useCallback((data: { name: string; warehouseId: string; locationId?: string | null; items: DeclarationItem[] }) => {
+    const newId = `R${Date.now().toString().slice(-6)}`;
+    const now = new Date();
+    const formattedDate = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+    const newRegistration: Registration = {
+        id: newId,
+        name: data.name,
+        createdAt: formattedDate,
+        status: 'pending',
+    };
+
+    const newDetail: RegistrationDetail = {
+        ...newRegistration,
+        createdBy: "CurrentUser",
+        updatedAt: formattedDate,
+        notes: "Phiếu tạo từ ứng dụng.",
+        warehouseId: data.warehouseId,
+        locationId: data.locationId || undefined,
+        items: data.items.map((item, index) => ({
+            id: `item-${newId}-${index}`,
+            name: item.assetTypeName,
+            quantityRequired: item.quantity,
+            quantityScanned: 0,
+        })),
+    };
+    
+    setRegistrations(prev => ({...prev, [newId]: newRegistration}));
+    setDeclarationData(prev => ({...prev, [newId]: newDetail}));
+    
+  }, []);
+
 
   const renderScreen = (screen: Screen) => {
     switch (screen.name) {
       case 'login':
         return <LoginScreen />;
       case 'home':
-        return <HomeScreen />;
+        return <HomeScreen registrations={Object.values(registrations)} inventoryTasks={Object.values(inventoryData)} />;
       case 'declarationList':
-        return <DeclarationListScreen registrations={Object.values(MOCK_REGISTRATIONS)} />;
+        return <DeclarationListScreen registrations={Object.values(registrations)} />;
       case 'declarationDetail':
         const detail = declarationData[screen.params?.registrationId || ''];
         return detail ? <DeclarationDetailScreen registrationDetail={detail} /> : <div>Loading...</div>;
+      case 'declarationCreate':
+        return <DeclarationCreateScreen />;
       case 'scan':
         const registration = declarationData[screen.params?.registrationId || ''];
         const item = registration?.items.find(i => i.id === screen.params?.itemId);
@@ -179,7 +215,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <NavigationContext.Provider value={{ navigate, goBack, resetTo, requestGoBack, confirmInventoryTask }}>
+    <NavigationContext.Provider value={{ navigate, goBack, resetTo, requestGoBack, confirmInventoryTask, createDeclaration }}>
       <div className="w-full h-full bg-gray-50 flex flex-col font-sans relative">
         {renderScreen(displayScreen)}
         {isRadarScanActive && currentScreen.name === 'radarScan' && (

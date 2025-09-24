@@ -1,5 +1,5 @@
-import { EXISTING_EPCS, MOCK_INVENTORY_TASKS, MOCK_INVENTORY_DETAILS, ALL_ASSETS_DB, ASSET_LOOKUP_DB, BARCODE_TO_EPC_MAP } from './data';
-import type { InventoryTask, InventoryTaskDetail, ScannedInventoryEPC, AssetDetails } from '../types';
+import { EXISTING_EPCS, MOCK_INVENTORY_TASKS, MOCK_INVENTORY_DETAILS, ALL_ASSETS_DB, ASSET_LOOKUP_DB, BARCODE_TO_EPC_MAP, MOCK_WAREHOUSES, MOCK_LOCATIONS, MOCK_ASSET_TYPES } from './data';
+import type { InventoryTask, InventoryTaskDetail, ScannedInventoryEPC, AssetDetails, Warehouse, Location, AssetType } from '../types';
 
 // Mock API functions with simulated delay
 export const login = (user: string, pass: string): Promise<boolean> => {
@@ -7,6 +7,30 @@ export const login = (user: string, pass: string): Promise<boolean> => {
         setTimeout(() => {
             resolve(user === 'admin' && pass === 'password');
         }, 1000);
+    });
+};
+
+export const getWarehouses = (): Promise<Warehouse[]> => {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            resolve(MOCK_WAREHOUSES);
+        }, 300);
+    });
+};
+
+export const getLocations = (): Promise<Location[]> => {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            resolve(MOCK_LOCATIONS);
+        }, 300);
+    });
+};
+
+export const getAssetTypes = (): Promise<AssetType[]> => {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            resolve(MOCK_ASSET_TYPES);
+        }, 300);
     });
 };
 

@@ -44,6 +44,7 @@ const DeclarationCard: React.FC<{ registration: Registration }> = ({ registratio
 
 
 const DeclarationListScreen: React.FC<DeclarationListScreenProps> = ({ registrations }) => {
+    const { navigate } = useNavigation();
     const pendingRegistrations = useMemo(() => 
         registrations.filter(reg => reg.status === 'pending'), 
         [registrations]
@@ -58,7 +59,7 @@ const DeclarationListScreen: React.FC<DeclarationListScreenProps> = ({ registrat
                 </main>
             </div>
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-transparent">
-                 <button className="w-full bg-[#3D3799] text-white py-4 rounded-lg font-semibold text-lg flex items-center justify-center space-x-2 shadow-lg">
+                 <button onClick={() => navigate('declarationCreate')} className="w-full bg-[#3D3799] text-white py-4 rounded-lg font-semibold text-lg flex items-center justify-center space-x-2 shadow-lg">
                     <span>+</span>
                     <span>Tạo mới</span>
                 </button>

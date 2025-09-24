@@ -18,6 +18,8 @@ export interface RegistrationDetail extends Registration {
   updatedAt: string;
   notes: string;
   items: Item[];
+  warehouseId?: string;
+  locationId?: string;
 }
 
 export interface ScannedEPC {
@@ -70,12 +72,36 @@ export interface AssetDetails {
   unit: string;
 }
 
+// New types for Declaration Creation
+export interface Warehouse {
+  id: string;
+  name: string;
+}
+
+export interface Location {
+  id: string;
+  name: string;
+  warehouseId: string;
+}
+
+export interface AssetType {
+  id: string;
+  name: string;
+}
+
+export interface DeclarationItem {
+    assetTypeId: string;
+    assetTypeName: string;
+    quantity: number;
+}
+
 
 export type Screen = 
   | { name: 'login'; params?: undefined }
   | { name: 'home'; params?: undefined }
   | { name: 'declarationList'; params?: undefined }
   | { name: 'declarationDetail'; params: { registrationId: string } }
+  | { name: 'declarationCreate'; params?: undefined }
   | { name: 'scan'; params: { registrationId: string; itemId: string } }
   | { name: 'radarScan'; params: { onScanComplete: (epcs: string[]) => void; mockEpcs?: string[] } }
   | { name: 'inventoryList'; params?: undefined }
@@ -97,4 +123,5 @@ export interface NavigationContextType {
   resetTo: (name: Screen['name'], params?: any) => void;
   requestGoBack: (count?: number) => void;
   confirmInventoryTask: (taskId: string) => void;
+  createDeclaration: (data: { name: string; warehouseId: string; locationId?: string | null; items: DeclarationItem[] }) => void;
 }
