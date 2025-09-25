@@ -24,23 +24,16 @@ const InfoLine: React.FC<{ label: string; value: string }> = ({ label, value }) 
     </div>
 );
 
-const ItemCard: React.FC<{ item: InventoryItem; taskId: string; isTaskCompleted: boolean; }> = ({ item, taskId, isTaskCompleted }) => {
-    const { navigate } = useNavigation();
+const ItemCard: React.FC<{ item: InventoryItem }> = ({ item }) => {
     const isItemCompleted = item.quantityScanned >= item.quantityRequired;
-    const canScan = !isTaskCompleted;
 
     return (
-        <button
-            onClick={() => canScan && navigate('inventoryScan', { taskId, assetId: item.assetId })}
-            disabled={!canScan}
-            className="w-full text-left bg-white p-4 rounded-xl shadow-sm border border-gray-100 disabled:opacity-70 disabled:bg-gray-50 disabled:cursor-not-allowed cursor-pointer hover:border-blue-400 transition-all"
-        >
+        <div className="w-full text-left bg-white p-4 rounded-xl shadow-sm border border-gray-100">
             <div className="flex justify-between items-start mb-3">
                 <div>
                     <h3 className="font-bold text-gray-800 text-lg">{item.assetType}</h3>
                     <p className="text-sm text-gray-500">{item.assetName}</p>
                 </div>
-                <ICONS.expand className="text-blue-600 w-6 h-6" />
             </div>
             
             <div className="space-y-2 text-sm">
@@ -53,18 +46,24 @@ const ItemCard: React.FC<{ item: InventoryItem; taskId: string; isTaskCompleted:
                     <span className={`font-semibold ${isItemCompleted ? 'text-green-600' : 'text-gray-800'}`}>{item.quantityScanned} <span className="text-gray-400">PCS</span></span>
                 </div>
             </div>
-        </button>
+        </div>
     );
 };
 
 const InventoryDetailScreen: React.FC<InventoryDetailScreenProps> = ({ taskDetail }) => {
-    const { goBack, confirmInventoryTask } = useNavigation();
+    const { goBack, confirmInventoryTask, navigate } = useNavigation();
     const [isConfirmPopupVisible, setConfirmPopupVisible] = useState(false);
     const [isSavePopupVisible, setSavePopupVisible] = useState(false);
     
+    const SaveButton = () => (
+        <button onClick={() => setSavePopupVisible(true)} className="p-2 text-gray-700">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+        </button>
+    );
+
     return (
         <Layout>
-            <Header title="Chi Tiết Phiếu Kiểm Kê" showBackButton={true} />
+            <Header title="Chi Tiết Phiếu Kiểm Kê" showBackButton={true} rightAccessory={<SaveButton />} />
             <div className="flex flex-col h-full">
                 <main className="flex-grow flex flex-col custom-scrollbar overflow-y-auto">
                     <div className="p-5 bg-white border-b border-gray-200">
@@ -99,17 +98,19 @@ const InventoryDetailScreen: React.FC<InventoryDetailScreenProps> = ({ taskDetai
                         </div>
                         <div className="space-y-3 pb-24">
                             {taskDetail.items.map(item => (
-                                <ItemCard key={item.assetId} item={item} taskId={taskDetail.id} isTaskCompleted={taskDetail.status === 'completed'}/>
+                                <ItemCard key={item.assetId} item={item} />
                             ))}
                         </div>
                     </div>
                 </main>
                 <div className="flex-shrink-0 p-4 bg-white border-t-2 border-gray-100 grid grid-cols-2 gap-3">
                     <button 
-                        onClick={() => setSavePopupVisible(true)}
-                        className="w-full bg-gray-200 text-gray-800 py-4 rounded-lg font-semibold text-lg"
+                        onClick={() => navigate('inventoryScan', { taskId: taskDetail.id })}
+                        className="w-full bg-gray-200 text-gray-800 py-4 rounded-lg font-semibold text-lg flex items-center justify-center space-x-2"
+                        disabled={taskDetail.status === 'completed'}
                     >
-                        Save
+                        <ICONS.scanIcon />
+                        <span>Scan</span>
                     </button>
                     <button
                         onClick={() => setConfirmPopupVisible(true)}

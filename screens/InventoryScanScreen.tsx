@@ -1,43 +1,24 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import type { InventoryItem, ScannedInventoryEPC } from '../types';
+
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import type { InventoryTaskDetail, InventoryItem, ScannedInventoryEPC, AssetInfo } from '../types';
 import { useNavigation } from '../App';
 import Layout from '../components/Layout';
 import Header from '../components/Header';
 import { ICONS } from '../constants';
-import { checkEpcInInventory } from '../services/api';
+import { ALL_ASSETS_DB } from '../services/data';
 import Popup from '../components/Popup';
 
-interface InventoryScanScreenProps {
-  item: InventoryItem;
-  taskId: string;
-  onConfirmScan: (taskId: string, assetId: string, scannedCount: number) => void;
-}
-
 // Internal state type for UI purposes
-type UIStatus = 'valid' | 'invalid_duplicate' | 'invalid_wrong_asset' | 'invalid_surplus' | 'invalid_not_found';
+type UIStatus = 'valid' | 'invalid_surplus' | 'invalid_not_found';
 interface ScannedEpcUI extends ScannedInventoryEPC {
     uiStatus: UIStatus;
 }
 
-const getStatusMessage = (scan: ScannedEpcUI): string => {
-    switch (scan.uiStatus) {
-        case 'invalid_duplicate': return 'Duplicate EPC in this session.';
-        case 'invalid_wrong_asset': return `Tài sản sai. Đã quét: ${scan.assetInfo?.assetName || 'Unknown'}`;
-        case 'invalid_surplus': return 'Tài sản thừa không có trong phiếu.';
-        case 'invalid_not_found': return 'EPC không tìm thấy trong hệ thống.';
-        default: return scan.epc;
-    }
-}
-
 const EpcListItem: React.FC<{
     scan: ScannedEpcUI;
-    isInvalid: boolean;
-    isSwiped: boolean;
-    onSwipe: () => void;
     onDelete: () => void;
-}> = ({ scan, isInvalid, isSwiped, onSwipe, onDelete }) => {
-    const translateX = isSwiped ? '-translate-x-24' : 'translate-x-0';
-
+}> = ({ scan, onDelete }) => {
+    const [isSwiped, setIsSwiped] = useState(false);
     return (
         <div className="relative bg-gray-100 rounded-lg shadow-sm overflow-hidden">
              <div className="absolute top-0 right-0 h-full w-24 flex items-center justify-center">
@@ -51,9 +32,9 @@ const EpcListItem: React.FC<{
                 </button>
             </div>
             <div
-                onClick={onSwipe}
-                className={`relative bg-white p-4 flex flex-col transition-transform duration-300 ease-in-out ${translateX}`}
-                style={{ cursor: isInvalid ? 'pointer' : 'default', zIndex: 1 }}
+                onClick={() => setIsSwiped(!isSwiped)}
+                className={`relative bg-white p-4 flex flex-col transition-transform duration-300 ease-in-out ${isSwiped ? '-translate-x-24' : 'translate-x-0'}`}
+                style={{ cursor: 'pointer', zIndex: 1 }}
             >
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
@@ -62,7 +43,7 @@ const EpcListItem: React.FC<{
                     </div>
                     <span className="font-semibold text-gray-800 font-mono">{scan.epc}</span>
                 </div>
-                 {isInvalid && <p className="text-red-600 text-sm mt-2 pl-10">{getStatusMessage(scan)}</p>}
+                <p className="text-red-600 text-sm mt-2 pl-10">EPC không tìm thấy trong hệ thống.</p>
             </div>
         </div>
     );
@@ -77,7 +58,7 @@ const SurplusEpcListItem: React.FC<{ scan: ScannedEpcUI }> = ({ scan }) => {
                     <ICONS.qrCode className="text-gray-500" />
                     <div>
                         <span className="font-semibold text-gray-800 font-mono">{scan.epc}</span>
-                        <p className="text-yellow-700 text-sm">{getStatusMessage(scan)}</p>
+                        <p className="text-yellow-700 text-sm">{`Tài sản thừa: ${scan.assetInfo?.assetName || 'Không rõ'}`}</p>
                     </div>
                 </div>
                 <button
@@ -95,211 +76,217 @@ const SurplusEpcListItem: React.FC<{ scan: ScannedEpcUI }> = ({ scan }) => {
     );
 };
 
+const MatchedAssetGroup: React.FC<{
+    item: InventoryItem;
+    scannedCount: number;
+}> = ({ item, scannedCount }) => {
+    const isCompleted = scannedCount >= item.quantityRequired;
+    const isOver = scannedCount > item.quantityRequired;
+    
+    let statusColor = 'text-gray-800';
+    if (isCompleted && !isOver) statusColor = 'text-green-600';
+    if (isOver) statusColor = 'text-red-600';
 
-const InventoryScanScreen: React.FC<InventoryScanScreenProps> = ({ item, taskId, onConfirmScan }) => {
+    return (
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+             <div className="flex justify-between items-start mb-3">
+                <div>
+                    <h3 className="font-bold text-gray-800 text-lg">{item.assetType}</h3>
+                    <p className="text-sm text-gray-500">{item.assetName}</p>
+                </div>
+            </div>
+            <div className="flex justify-between items-center text-sm text-gray-600">
+                <span>Số lượng đã quét / cần quét</span>
+                <span className={`font-semibold ${statusColor}`}>
+                    {scannedCount} / {item.quantityRequired} <span className="text-gray-400">PCS</span>
+                </span>
+            </div>
+        </div>
+    );
+};
+
+
+interface InventoryScanScreenProps {
+  taskDetail: InventoryTaskDetail;
+  onConfirmScan: (taskId: string, validScans: ScannedEpcUI[]) => void;
+}
+
+const InventoryScanScreen: React.FC<InventoryScanScreenProps> = ({ taskDetail, onConfirmScan }) => {
     const { goBack, navigate } = useNavigation();
-    const [activeTab, setActiveTab] = useState<'valid' | 'surplus' | 'error'>('valid');
+    const [activeTab, setActiveTab] = useState<'matched' | 'surplus' | 'error'>('matched');
     const [scannedEPCs, setScannedEPCs] = useState<ScannedEpcUI[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [swipedInvalidEpc, setSwipedInvalidEpc] = useState<string | null>(null);
-    const [popupInfo, setPopupInfo] = useState<{isVisible: boolean; type: 'confirm_submit' | null}>({ isVisible: false, type: null });
+    const [popupVisible, setPopupVisible] = useState(false);
 
-    const validScans = useMemo(() => scannedEPCs.filter(s => s.uiStatus === 'valid'), [scannedEPCs]);
-    const surplusScans = useMemo(() => scannedEPCs.filter(s => s.uiStatus === 'invalid_surplus' || s.uiStatus === 'invalid_wrong_asset'), [scannedEPCs]);
-    const errorScans = useMemo(() => scannedEPCs.filter(s => s.uiStatus === 'invalid_not_found'), [scannedEPCs]);
-    
-    const handleScanResults = useCallback(async (epcs: string[]) => {
+    const expectedEpcMap = useMemo(() => {
+        const map = new Map<string, string>(); // epc -> assetId
+        taskDetail.items.forEach(item => {
+            item.expectedEpcs.forEach(epc => {
+                map.set(epc, item.assetId);
+            });
+        });
+        return map;
+    }, [taskDetail.items]);
+
+    const handleScanResults = useCallback((epcs: string[]) => {
         if (epcs.length === 0) return;
         
         setIsProcessing(true);
         const newScans: ScannedEpcUI[] = [];
         const currentEpcs = new Set(scannedEPCs.map(s => s.epc));
 
-        // Simulate a more realistic scan including valid, surplus, wrong asset, and error EPCs
-        const mockNewEpcs = [
-            ...epcs,
-            ...(item.expectedEpcs.slice(0, 2)), // Scan up to 2 valid EPCs for the current asset
-            'EPC-E5-001', // Surplus: Exists in DB, not in this task.
-            'EPC-A1-001', // Wrong Asset: Belongs to another asset in the same task.
-            'UNKNOWN-EPC-123', // Error: Not in the system DB at all.
-        ];
-        const uniqueEpcs = [...new Set(mockNewEpcs)];
+        const uniqueNewEpcs = epcs.filter(epc => !currentEpcs.has(epc));
 
-
-        for (const epc of uniqueEpcs) {
-            if (currentEpcs.has(epc)) {
-                // Already processed in this session
-                continue;
-            }
-            
-            const result = await checkEpcInInventory(epc, taskId);
+        for (const epc of uniqueNewEpcs) {
             let uiStatus: UIStatus;
-
-            if (result.status === 'error_not_found') {
+            const assetInfo = ALL_ASSETS_DB[epc];
+            let status: ScannedInventoryEPC['status'] = 'error_not_found';
+            
+            if (assetInfo) { // Found in system DB
+                if (expectedEpcMap.has(epc)) {
+                    uiStatus = 'valid';
+                    status = 'valid';
+                } else {
+                    uiStatus = 'invalid_surplus';
+                    status = 'surplus';
+                }
+            } else { // Not in system DB
                 uiStatus = 'invalid_not_found';
-            } else if (result.status === 'surplus') {
-                uiStatus = 'invalid_surplus';
-            } else if (result.assetInfo?.assetId !== item.assetId) {
-                uiStatus = 'invalid_wrong_asset';
-            } else {
-                uiStatus = 'valid';
+                status = 'error_not_found';
             }
-            newScans.push({ epc, ...result, uiStatus });
-            currentEpcs.add(epc);
+            newScans.push({ epc, status, assetInfo, uiStatus });
         }
 
         if (newScans.length > 0) {
             setScannedEPCs(prevScans => [...prevScans, ...newScans]);
         }
-
+        
         const hasError = newScans.some(s => s.uiStatus === 'invalid_not_found');
-        const hasSurplus = newScans.some(s => s.uiStatus === 'invalid_surplus' || s.uiStatus === 'invalid_wrong_asset');
+        const hasSurplus = newScans.some(s => s.uiStatus === 'invalid_surplus');
 
-        if (hasError) {
-            setActiveTab('error');
-        } else if (hasSurplus) {
-            setActiveTab('surplus');
-        }
+        if (hasError) setActiveTab('error');
+        else if (hasSurplus) setActiveTab('surplus');
         
         setIsProcessing(false);
-    }, [scannedEPCs, taskId, item.assetId, item.expectedEpcs]);
+    }, [scannedEPCs, expectedEpcMap]);
 
-    const handleScan = () => {
-        navigate('radarScan', { onScanComplete: handleScanResults });
-    };
+    const matchedScans = useMemo(() => scannedEPCs.filter(s => s.uiStatus === 'valid'), [scannedEPCs]);
+    const surplusScans = useMemo(() => scannedEPCs.filter(s => s.uiStatus === 'invalid_surplus'), [scannedEPCs]);
+    const errorScans = useMemo(() => scannedEPCs.filter(s => s.uiStatus === 'invalid_not_found'), [scannedEPCs]);
+
+    const matchedItemsData = useMemo(() => {
+        const groupedByAssetId = new Map<string, number>();
+        matchedScans.forEach(scan => {
+            const assetId = scan.assetInfo?.assetId;
+            if (assetId) {
+                groupedByAssetId.set(assetId, (groupedByAssetId.get(assetId) || 0) + 1);
+            }
+        });
+
+        return taskDetail.items.map(item => ({
+            item,
+            scannedCount: groupedByAssetId.get(item.assetId) || 0,
+        }));
+    }, [matchedScans, taskDetail.items]);
 
     const handleConfirm = () => {
-        setPopupInfo({ isVisible: true, type: 'confirm_submit' });
+        setPopupVisible(true);
     };
 
-    const handleDeleteInvalidScan = (epcToDelete: string) => {
+    const confirmAndGoBack = () => {
+        onConfirmScan(taskDetail.id, matchedScans);
+        goBack();
+    }
+
+    const handleDeleteErrorScan = (epcToDelete: string) => {
         setScannedEPCs(prev => prev.filter(s => s.epc !== epcToDelete));
-        setSwipedInvalidEpc(null);
     };
 
-    const EpcList = ({ epcs, isInvalidList = false }: { epcs: ScannedEpcUI[], isInvalidList?: boolean }) => (
-        <div className="space-y-3">
-            {epcs.map((scan) => (
-                 <EpcListItem
-                    key={scan.epc}
-                    scan={scan}
-                    isInvalid={isInvalidList}
-                    isSwiped={isInvalidList && swipedInvalidEpc === scan.epc}
-                    onSwipe={() => isInvalidList && setSwipedInvalidEpc(prev => prev === scan.epc ? null : scan.epc)}
-                    onDelete={() => handleDeleteInvalidScan(scan.epc)}
-                />
-            ))}
-            {epcs.length === 0 && (
-                <div className="text-center text-gray-500 pt-10">
-                    <p>Chưa có EPC nào được quét.</p>
-                </div>
-            )}
-        </div>
-    );
-    
+    const handleScan = () => {
+        const mockEpcs = [
+            ...taskDetail.items[0].expectedEpcs.slice(0, 2), // 2 valid for item 1
+            ...taskDetail.items[1].expectedEpcs.slice(0, 1), // 1 valid for item 2
+            'EPC-D4-001', // surplus
+            'EPC-E5-001', // surplus
+            'UNKNOWN-EPC-001', // error
+            'UNKNOWN-EPC-002', // error
+        ];
+        navigate('radarScan', { onScanComplete: handleScanResults, mockEpcs });
+    };
+
+    useEffect(() => {
+        // Automatically start scanning when the screen is opened for the first time.
+        handleScan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // This effect runs only once on component mount.
+
     const renderActiveList = () => {
         switch(activeTab) {
-            case 'valid':
-                return <EpcList epcs={validScans} />;
+            case 'matched':
+                return (
+                    <div className="space-y-3">
+                        {matchedItemsData.map(data => <MatchedAssetGroup key={data.item.assetId} {...data} />)}
+                    </div>
+                );
             case 'surplus':
                  return (
                     <div className="space-y-3">
                         {surplusScans.map((scan) => <SurplusEpcListItem key={scan.epc} scan={scan} />)}
-                        {surplusScans.length === 0 && (
-                            <div className="text-center text-gray-500 pt-10">
-                                <p>Chưa có EPC nào được quét.</p>
-                            </div>
-                        )}
+                        {surplusScans.length === 0 && <p className="text-center text-gray-500 pt-10">Không có tài sản thừa.</p>}
                     </div>
                 );
             case 'error':
-                return <EpcList epcs={errorScans} isInvalidList={true} />;
+                 return (
+                    <div className="space-y-3">
+                        {errorScans.map((scan) => <EpcListItem key={scan.epc} scan={scan} onDelete={() => handleDeleteErrorScan(scan.epc)} />)}
+                        {errorScans.length === 0 && <p className="text-center text-gray-500 pt-10">Không có EPC lỗi.</p>}
+                    </div>
+                );
             default:
                 return null;
         }
     }
 
-    const renderPopup = () => {
-        if (!popupInfo.isVisible) return null;
-        const closePopup = () => setPopupInfo({ isVisible: false, type: null });
-
-        if (popupInfo.type === 'confirm_submit') {
-             return <Popup
-                isVisible={true}
-                title="Xác nhận kiểm kê"
-                message={`Bạn có chắc chắn muốn xác nhận ${validScans.length} tài sản đã quét?`}
-                onClose={closePopup}
-                onConfirm={() => {
-                    onConfirmScan(taskId, item.assetId, validScans.length);
-                    goBack();
-                }}
-                confirmButtonText="Xác nhận"
-                cancelButtonText="Hủy"
-            />
-        }
-        return null;
-    }
-    
-    const getTabCount = (tab: typeof activeTab) => {
-        switch(tab) {
-            case 'valid': return validScans.length;
-            case 'surplus': return surplusScans.length;
-            case 'error': return errorScans.length;
-        }
-    }
-
     return (
         <Layout>
-            <Header title={item.assetName} showBackButton={true} />
+            <Header title="Kết quả quét" showBackButton={true} />
             <div className="p-4 flex-grow flex flex-col overflow-hidden">
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="bg-blue-500 text-white p-3 rounded-xl flex flex-col items-center justify-center shadow-lg text-center">
-                        <span className="font-semibold text-base">Số lượng theo hệ thống</span>
-                        <span className="text-3xl font-bold">{item.quantityRequired}</span>
-                    </div>
-                    <div className="bg-yellow-500 text-white p-3 rounded-xl flex flex-col items-center justify-center shadow-lg text-center">
-                        <span className="font-semibold text-base">Đã quét</span>
-                        <span className="text-3xl font-bold">{validScans.length}</span>
-                    </div>
-                </div>
-
                 <div className="flex border-b mb-4">
-                    <button onClick={() => setActiveTab('valid')} className={`flex-1 py-3 font-semibold transition-colors text-sm ${activeTab === 'valid' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>
-                        Hợp lệ
+                    <button onClick={() => setActiveTab('matched')} className={`flex-1 py-3 font-semibold transition-colors text-sm ${activeTab === 'matched' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>
+                        Khớp ({matchedScans.length})
                     </button>
                     <button onClick={() => setActiveTab('surplus')} className={`flex-1 py-3 font-semibold transition-colors text-sm ${activeTab === 'surplus' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>
-                        <div className="flex items-center justify-center space-x-2">
-                            <span>Thừa</span>
-                            {surplusScans.length > 0 && <span className="bg-yellow-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">{surplusScans.length}</span>}
-                        </div>
+                        Thừa ({surplusScans.length})
                     </button>
                     <button onClick={() => setActiveTab('error')} className={`flex-1 py-3 font-semibold transition-colors text-sm ${activeTab === 'error' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>
-                         <div className="flex items-center justify-center space-x-2">
-                            <span>Lỗi</span>
-                            {errorScans.length > 0 && <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">{errorScans.length}</span>}
-                        </div>
+                        Lỗi ({errorScans.length})
                     </button>
                 </div>
                 
-                <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-md font-bold text-gray-800">Danh sách EPC</h3>
-                    <span className="bg-gray-200 text-gray-700 text-sm font-bold px-2.5 py-1 rounded-md">{getTabCount(activeTab)}</span>
-                </div>
-
-                <div className="flex-grow custom-scrollbar overflow-y-auto">
+                <div className="flex-grow custom-scrollbar overflow-y-auto pb-40">
                     {renderActiveList()}
                 </div>
             </div>
             
-            <div className="flex-shrink-0 p-4 bg-white border-t border-gray-200 grid grid-cols-2 gap-3">
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 grid grid-cols-2 gap-3">
                 <button onClick={handleScan} disabled={isProcessing} className="w-full bg-gray-200 text-gray-800 py-4 rounded-lg font-semibold text-lg flex items-center justify-center space-x-2 disabled:opacity-50">
-                    {isProcessing ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-800"></div> : <><ICONS.scanIcon /><span>Scan</span></>}
+                    {isProcessing ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-800"></div> : <><ICONS.scanIcon /><span>Tiếp tục Scan</span></>}
                 </button>
                 <button onClick={handleConfirm} className="w-full bg-[#3D3799] text-white py-4 rounded-lg font-semibold text-lg">
-                    Confirm
+                    Xác nhận
                 </button>
             </div>
-            {renderPopup()}
+            {popupVisible && (
+                <Popup
+                    isVisible={true}
+                    title="Xác nhận kết quả"
+                    message="Bạn có chắc chắn muốn xác nhận kết quả quét này? Số lượng đã kiểm kê sẽ được cập nhật."
+                    onClose={() => setPopupVisible(false)}
+                    onConfirm={confirmAndGoBack}
+                    confirmButtonText="Xác nhận"
+                    cancelButtonText="Hủy"
+                />
+            )}
         </Layout>
     );
 };

@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, createContext, useContext } from 'react';
 // FIX: `NavigationContextType` was not imported. It's needed for the NavigationContext.
-import type { Screen, Registration, RegistrationDetail, InventoryTaskDetail, NavigationContextType, AssetDetails, DeclarationItem } from './types';
+import type { Screen, Registration, RegistrationDetail, InventoryTaskDetail, NavigationContextType, AssetDetails, DeclarationItem, InventoryItem, AssetInfo } from './types';
 import { MOCK_REGISTRATIONS, MOCK_REGISTRATION_DETAILS, MOCK_INVENTORY_DETAILS } from './services/data';
 
 import LoginScreen from './screens/LoginScreen';
@@ -93,25 +93,33 @@ const App: React.FC = () => {
     });
   }, []);
 
-  const updateInventoryScannedData = useCallback((taskId: string, assetId: string, scannedCount: number) => {
-      setInventoryData(prevData => {
-          const updatedDetails = { ...prevData };
-          const task = updatedDetails[taskId];
-          if (task) {
-              const itemIndex = task.items.findIndex(item => item.assetId === assetId);
-              if (itemIndex !== -1) {
-                  task.items[itemIndex].quantityScanned = scannedCount;
-                  
-                  const allItemsCompleted = task.items.every(
-                      it => it.quantityScanned >= it.quantityRequired
-                  );
-                  if (allItemsCompleted) {
-                      task.status = 'completed';
-                  }
-              }
-          }
-          return updatedDetails;
-      });
+  const updateInventoryTaskCounts = useCallback((taskId: string, validScans: { assetInfo?: AssetInfo }[]) => {
+    setInventoryData(prevData => {
+        const updatedDetails = { ...prevData };
+        const task = JSON.parse(JSON.stringify(updatedDetails[taskId])); // Deep copy for mutation
+        if (task) {
+            const itemMap = new Map<string, InventoryItem>(task.items.map((i: InventoryItem) => [i.assetId, i]));
+            
+            // Reset counts for all items in the task
+            for (const item of itemMap.values()) {
+                item.quantityScanned = 0;
+            }
+
+            // Recalculate counts based on the new valid scan list
+            for (const scan of validScans) {
+                if (scan.assetInfo) {
+                    const item = itemMap.get(scan.assetInfo.assetId);
+                    if (item) {
+                        item.quantityScanned += 1;
+                    }
+                }
+            }
+            
+            task.items = Array.from(itemMap.values());
+            updatedDetails[taskId] = task;
+        }
+        return updatedDetails;
+    });
   }, []);
 
   const confirmInventoryTask = useCallback((taskId: string) => {
@@ -186,12 +194,10 @@ const App: React.FC = () => {
         return taskDetail ? <InventoryDetailScreen taskDetail={taskDetail} /> : <div>Loading...</div>;
       case 'inventoryScan':
          const taskDetailForScan = inventoryData[screen.params.taskId];
-         const itemForScan = taskDetailForScan?.items.find(i => i.assetId === screen.params.assetId);
-         return itemForScan ? <InventoryScanScreen 
-            item={itemForScan} 
-            taskId={screen.params.taskId} 
-            onConfirmScan={updateInventoryScannedData}
-          /> : <div>Asset not found</div>;
+         return taskDetailForScan ? <InventoryScanScreen 
+            taskDetail={taskDetailForScan} 
+            onConfirmScan={updateInventoryTaskCounts}
+          /> : <div>Task not found</div>;
        case 'assetFinder':
          return <AssetFinderScreen epc={screen.params.epc} assetName={screen.params.assetName} />;
       // New cases for lookup feature
@@ -215,7 +221,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <NavigationContext.Provider value={{ navigate, goBack, resetTo, requestGoBack, confirmInventoryTask, createDeclaration }}>
+    <NavigationContext.Provider value={{ navigate, goBack, resetTo, requestGoBack, confirmInventoryTask, createDeclaration, updateInventoryTaskCounts }}>
       <div className="w-full h-full bg-gray-50 flex flex-col font-sans relative">
         {renderScreen(displayScreen)}
         {isRadarScanActive && currentScreen.name === 'radarScan' && (

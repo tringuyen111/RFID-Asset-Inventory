@@ -106,7 +106,7 @@ export type Screen =
   | { name: 'radarScan'; params: { onScanComplete: (epcs: string[]) => void; mockEpcs?: string[] } }
   | { name: 'inventoryList'; params?: undefined }
   | { name: 'inventoryDetail'; params: { taskId: string } }
-  | { name: 'inventoryScan'; params: { taskId: string; assetId: string; } }
+  | { name: 'inventoryScan'; params: { taskId: string; } }
   | { name: 'assetFinder'; params: { epc: string; assetName: string; } }
   // New screens for lookup feature
   | { name: 'lookup'; params?: undefined }
@@ -124,4 +124,5 @@ export interface NavigationContextType {
   requestGoBack: (count?: number) => void;
   confirmInventoryTask: (taskId: string) => void;
   createDeclaration: (data: { name: string; warehouseId: string; locationId?: string | null; items: DeclarationItem[] }) => void;
+  updateInventoryTaskCounts: (taskId: string, validScans: { assetInfo?: AssetInfo }[]) => void;
 }
